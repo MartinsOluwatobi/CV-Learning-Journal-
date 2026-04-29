@@ -8,4 +8,4 @@ class FeatureExtractor(nn.Module):
         self.backbone = nn.Sequential(*list(resnet.children())[:-2])
 
     def forward(self,x):
-        return self.backbone(x) # -> B,2048,7,7
+        return self.backbone(x) # B,3, 224, 224 → B, 2048, 7,7
