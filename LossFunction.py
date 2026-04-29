@@ -1,26 +1,38 @@
 import torch
 import torch.nn.functional as F
-from torchvision.ops import box_iou
-
+from torchvision.ops import box_iou 
 def Encode_rpn_target_and_label (anchors, ground_truth_boxes, neg_iou =0.3, positive_iou = 0.7):
+    '''Group anchor boxes based on using intercept over union (iou)
+      threshold when they compare with ground truth boxes
+      1 is assigned to anchor box iou greater than the higher limit threshold 
+      0 is assigned to anchor box with iou lesser than the lower limit threshold'''
     N = anchors.shape[0]
-    labels = torch.full((N,),-1, dtype= torch.float32, device = anchors.device)
+    # create label list of the size as anchor generated per image with value of -1. -1 means ignore 
+    labels = torch.full((N,),-1, dtype= torch.long, device = anchors.device)
+    # initiate target for the answers as zero 
     target = torch.zeros((N,4),dtype= torch.float32, device= anchors.device)
     if ground_truth_boxes.numel() == 0:
         labels[:] = 0
-        return labels, target
-    iou = box_iou(anchors, ground_truth_boxes)
+        return labels, target 
+    # Get the iou matrix that compares each anchor box to the groundtruths 
+    iou = box_iou(anchors, ground_truth_boxes) # Returns matrix of shape (N,M) M is the number if groundtruth for the image
+    # For each anchor, get the ground truth box it overlaps most with
     anchor_max_iou, anchor_matched_idx = iou.max(dim=1)
+    # For each ground truth box, get the anchor with the highest IoU
     ground_truth_max, ground_truth_max_index = iou.max(dim=0)
+    #force assign anchor to ground truth if the best iou is less than the postive iou     
     best_anchor_per_ground_truth = (iou == ground_truth_max).any(dim=1)
 
+    
     labels[anchor_max_iou>positive_iou] = 1
     labels[anchor_max_iou< neg_iou] = 0
     labels[best_anchor_per_ground_truth] = 1
 
+    #get the positions of labels assigned values of 1 and 0
     pos_idx = (labels==1).nonzero(as_tuple=True)[0]
     neg_idx = (labels==0).nonzero(as_tuple=True)[0]
 
+    # setting the amount of positive and negative labels that will be picked to avoid having imbalance labels
     num_pos = min(len(pos_idx),128)
     num_neg = min(len(neg_idx), 256 - num_pos)
 
@@ -31,7 +43,7 @@ def Encode_rpn_target_and_label (anchors, ground_truth_boxes, neg_iou =0.3, posi
     mask = torch.zeros((N,), dtype= torch.bool, device = anchors.device)
     mask[keep] = True
     labels[~mask] = -1
-
+   
     matched_gt = ground_truth_boxes[anchor_matched_idx]
 
     anchor_w   = anchors[:, 2] - anchors[:, 0]
@@ -53,28 +65,44 @@ def Encode_rpn_target_and_label (anchors, ground_truth_boxes, neg_iou =0.3, posi
 
     return labels, deltas
 
+def Encode_final_target_label (proposal,ground_truth_box,ground_truth_labels, pos_threshold = 0.7,neg_threshold = 0.3, num_samples = 128, pos_fraction =0.25):
+    N = proposal.shape[0]
+    labels = torch.zeros((N), dtype=torch.long,device = proposal.device)
+    iou = box_iou(proposal,ground_truth_box)
+    max_iou, best_gt_idx = iou.max(dim = 1)
+    labels[(max_iou>= neg_threshold) & (max_iou<=pos_threshold)]= -1
+    labels[max_iou>= pos_threshold] = ground_truth_labels[best_gt_idx[max_iou>=pos_threshold]]
 
+    pos_idx = (labels> 0).nonzero(as_tuple=True)[0]
+    neg_idx = (labels==0).nonzero(as_tuple=True)[0]
+
+    pos_idx = pos_idx[torch.randperm(len(pos_idx),device = proposal.device)[:int(num_samples * pos_fraction)]]
+    neg_idx = neg_idx[torch.randperm(len(neg_idx),device = proposal.device)[:(num_samples - len(pos_idx))]]
+    idx     = torch.cat([pos_idx, neg_idx])
+
+    p, g    = proposal[idx], ground_truth_box[best_gt_idx[idx]]
+    pw      = (p[:, 2] - p[:, 0]).clamp(1e-6)
+    ph = (p[:, 3] - p[:, 1]).clamp(1e-6)
+    gw      = (g[:, 2] - g[:, 0]).clamp(1e-6)
+    gh = (g[:, 3] - g[:, 1]).clamp(1e-6)
+    deltas  = torch.stack([
+        (g[:, 0] + 0.5*gw - p[:, 0] - 0.5*pw) / pw,
+        (g[:, 1] + 0.5*gh - p[:, 1] - 0.5*ph) / ph,
+        torch.log(gw / pw),
+        torch.log(gh / ph),
+    ], dim=1)
+
+    return idx, labels[idx], deltas
 
 def rpn_loss(cls_logits, rpn_reg_layer, labels, target_deltas):
-    """
-    cls_logits: (N, 2) - Predicted Objectness
-    reg_deltas: (N, 4) - Predicted offsets
-    labels: (N) - Ground truth (1=fg, 0=bg, -1=ignore)
-    target_deltas: (N, 4) - Actual offsets to GT
-    """
-    # 1. Classification Loss (Only for non-ignored anchors)
-    # We use CrossEntropy only where label is not -1
     mask = labels >= 0
     cls_loss = F.cross_entropy(cls_logits[mask], labels[mask])
-
-    # 2. Regression Loss (Only for Positive anchors)
     pos_mask = labels == 1
     if pos_mask.sum() > 0:
-        # Smooth L1 is less sensitive to outliers than MSE
         reg_loss = F.smooth_l1_loss(
             rpn_reg_layer[pos_mask], 
             target_deltas[pos_mask], 
-            beta=1.0/9.0 # Standard beta for RPN
+            beta=1.0/9.0 
         )
     else:
         reg_loss = torch.tensor(0.0).to(cls_logits.device)
@@ -83,26 +111,13 @@ def rpn_loss(cls_logits, rpn_reg_layer, labels, target_deltas):
 
 
 def final_rcnn_loss(class_logits, box_deltas, labels, target_deltas):
-    """
-    class_logits: (N, num_classes)
-    box_deltas: (N, num_classes * 4) - Faster R-CNN predicts 4 deltas per class
-    labels: (N) - Ground truth class indices
-    target_deltas: (N, 4)
-    """
-    # 1. Multi-class Classification Loss
     cls_loss = F.cross_entropy(class_logits, labels)
-
-    # 2. Class-Specific Regression Loss
-    # We only care about the deltas for the TRUE class
-    pos_mask = labels > 0 # index 0 is usually background
+    pos_mask = labels > 0 
     if pos_mask.sum() > 0:
-        # Extract only the deltas corresponding to the ground truth class
-        # (N, num_classes, 4) -> reshape to pick specific class
         pos_indices = torch.where(pos_mask)[0]
         pos_labels = labels[pos_mask]
-        
-        # Select the 4 coordinates for the specific class assigned to each RoI
-        pred_deltas = box_deltas.view(-1, 2, 4)
+        num_classes = box_deltas.shape[1] // 4
+        pred_deltas = box_deltas.view(-1, num_classes, 4)
         pred_deltas = pred_deltas[pos_indices, pos_labels]
 
         reg_loss = F.smooth_l1_loss(pred_deltas, target_deltas[pos_mask])
