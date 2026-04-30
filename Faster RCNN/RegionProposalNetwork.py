@@ -24,26 +24,30 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
     def anchor_generator(self, feature_map, anchor_sizes= [128, 256, 512], ratios = [0.5,1,2]):
         '''generates 9 anchors (3 sizes × 3 ratios) at every feature map cell
         centre point is (i+0.5)*stride to align with image pixel space'''
-        device = feature_map.device                         
+        device = feature_map.device             
+        img_h, img_w = self.image_shape            
         feature_map_height, feature_map_width = feature_map.shape[2], feature_map.shape[3] # feature size is used as starting point since the size and ratio will cover the whole image at the max lenght of the feature map's width and height
-        anchors = []
-        ratios = torch.tensor(ratios, dtype=torch.float32, device= feature_map.device)
-        anchor_sizes = torch.tensor(anchor_sizes, dtype=torch.float32,device= feature_map.device)
-        img_h, img_w = self.image_shape
-        for y in range(feature_map_height):
-            for x in range(feature_map_width):
-                ix = (x + 0.5) * self.stride
-                iy = (y + 0.5) * self.stride
-                for size in anchor_sizes:
-                    for ratio in ratios:
-                        w = size * torch.sqrt(ratio)
-                        h = size / torch.sqrt(ratio)
-                        x1 =torch.clamp(ix - w/2, min = 0, max = img_w)
-                        y1 = torch.clamp(iy- h/2, min = 0, max = img_h)
-                        x2 = torch.clamp(ix + w/2, min = 0, max = img_w)
-                        y2 = torch.clamp(iy + h/2, min = 0, max = img_h)
-                        anchors.append(torch.stack([x1,y1,x2,y2]))
-        return torch.stack(anchors) 
+        
+        shift_x = torch.arange(feature_map_width, dtype= torch.float32, device=device) 
+        shift_y= torch.arange(feature_map_height, dtype= torch.float32, device= device)
+
+        cy, cx = torch.meshgrid(shift_y,shift_x)
+        cy = (cy.reshape(-1) + 0.5) * self.stride
+        cx = (cx.reshape(-1) + 0.5) * self.stride 
+
+        sizes = torch.tensor(anchor_sizes, dtype = torch.float32, device= device)
+        ratio = torch.tensor(ratios,dtype= torch.float32, device= device )
+        
+        wx = (sizes[:,None] * ratio[None].sqrt()).reshape(-1)
+        hy = (sizes[:,None] / ratio[None].sqrt()).reshape(-1)
+
+        x1 = (cx[:,None] - wx[None]/2).clamp(0,img_w)
+        y1 = (cy[:,None] - hy[None]/2).clamp(0,img_h)
+        x2 = (cx[:,None] + wx[None]/2).clamp(0,img_w)
+        y2 = (cx[:,None] + hy[None]/2).clamp(0,img_h)
+        
+        anchors = torch.cat([x1,y1,x2,y2], dim=2)
+        return anchors.reshape(-1,4)
     
 
     def apply_delta_to_anchor (self, delta, anchor):
