@@ -31,7 +31,7 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
         shift_x = torch.arange(feature_map_width, dtype= torch.float32, device=device) 
         shift_y= torch.arange(feature_map_height, dtype= torch.float32, device= device)
 
-        cy, cx = torch.meshgrid(shift_y,shift_x)
+        cy, cx = torch.meshgrid(shift_y,shift_x,indexing='ij')
         cy = (cy.reshape(-1) + 0.5) * self.stride
         cx = (cx.reshape(-1) + 0.5) * self.stride 
 
@@ -46,7 +46,7 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
         x2 = (cx[:,None] + wx[None]/2).clamp(0,img_w)
         y2 = (cx[:,None] + hy[None]/2).clamp(0,img_h)
         
-        anchors = torch.cat([x1,y1,x2,y2], dim=2)
+        anchors = torch.stack([x1,y1,x2,y2], dim=2)
         return anchors.reshape(-1,4)
     
 
