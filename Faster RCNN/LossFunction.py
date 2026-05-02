@@ -125,3 +125,22 @@ def final_rcnn_loss(class_logits, box_deltas, labels, target_deltas):
         reg_loss = torch.tensor(0.0).to(class_logits.device)
 
     return cls_loss, reg_loss
+
+def box_coordinate(delta,proposal_box):
+    pw = proposal_box[:,2] - proposal_box[:,0] #proposal box's width
+    ph = proposal_box[:,3] - proposal_box[:,1] # proposal box's height
+    p_cx = proposal_box[:,0] + 0.5 * pw # proposal box's centre point x
+    p_cy = proposal_box[:,1] + 0.5 * ph # proposal box's centre point y
+
+    dx,dy,dw,dh = delta[:,0],delta[:,1],delta[:,2],delta[:,3]
+    gx = dx * pw + p_cx
+    gy = dy * ph + p_cy
+    gw = torch.exp(dw.clamp(max=4.0)) * pw
+    gh = torch.exp(dh.clamp(max=4.0)) * ph
+
+    x1 = gx - gw * 0.5 
+    y1 = gy - gh * 0.5
+    x2 = gx + gw * 0.5
+    y2 = gy + gh * 0.5
+    return torch.stack([x1,y1,x2,y2],dim=1)
+
