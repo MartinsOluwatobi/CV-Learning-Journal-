@@ -127,8 +127,8 @@ def final_rcnn_loss(class_logits, box_deltas, labels, target_deltas):
     return cls_loss, reg_loss
 
 def box_coordinate(delta,proposal_box):
-    pw = proposal_box[:,2] - proposal_box[:,0] #proposal box's width
-    ph = proposal_box[:,3] - proposal_box[:,1] # proposal box's height
+    pw = (proposal_box[:,2] - proposal_box[:,0]).clamp(min= 1e-6) #proposal box's width
+    ph = (proposal_box[:,3] - proposal_box[:,1]).clamp(min= 1e-6) # proposal box's height
     p_cx = proposal_box[:,0] + 0.5 * pw # proposal box's centre point x
     p_cy = proposal_box[:,1] + 0.5 * ph # proposal box's centre point y
 
