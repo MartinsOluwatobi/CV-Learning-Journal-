@@ -22,7 +22,7 @@ each other too much >> pick the box proposal boxes using non maximum suppresion'
         self.image_shape = image_shape
 
 
-    def anchor_generator(self, feature_map, anchor_sizes= [128, 256, 512], ratios = [0.5,1,2]):
+    def anchor_generator(self, feature_map, anchor_sizes= [32, 64, 128], ratios = [0.5,1,2]):
         '''generates 9 anchors (3 sizes x 3 ratios) at every feature map cell
         centre point is (i+0.5)*stride to align with image pixel space'''
         device = feature_map.device             
