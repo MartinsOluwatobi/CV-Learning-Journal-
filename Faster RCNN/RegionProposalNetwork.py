@@ -7,8 +7,9 @@ from torchvision.ops import box_iou
 
 class RegionProposalNetwork(nn.Module):
     '''Receive feature map from backbone >> generate binary logit for classifying or objectifying pixel map within 
-anchor boxes and delta for moving anchor boxes towards ground truth using conv>> generate anchors that distribute and cover every pixels of the image
->> big the best unique boxes which doesn't intercept with each other too much >> pick the box proposal boxes using non maximum suppresion'''
+anchor boxes and delta for moving anchor boxes towards ground truth using conv>> generate anchors that 
+distribute and cover every pixels of the image >> big the best unique boxes which doesn't intercept with 
+each other too much >> pick the box proposal boxes using non maximum suppresion'''
 
     def __init__ (self,in_channels, mid_channels,image_shape, num_anchors = 9, stride = 32): 
         super().__init__()
@@ -22,7 +23,7 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
 
 
     def anchor_generator(self, feature_map, anchor_sizes= [128, 256, 512], ratios = [0.5,1,2]):
-        '''generates 9 anchors (3 sizes × 3 ratios) at every feature map cell
+        '''generates 9 anchors (3 sizes x 3 ratios) at every feature map cell
         centre point is (i+0.5)*stride to align with image pixel space'''
         device = feature_map.device             
         img_h, img_w = self.image_shape            
@@ -44,7 +45,7 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
         x1 = (cx[:,None] - wx[None]/2).clamp(0,img_w)
         y1 = (cy[:,None] - hy[None]/2).clamp(0,img_h)
         x2 = (cx[:,None] + wx[None]/2).clamp(0,img_w)
-        y2 = (cx[:,None] + hy[None]/2).clamp(0,img_h)
+        y2 = (cy[:,None] + hy[None]/2).clamp(0,img_h)
         
         anchors = torch.stack([x1,y1,x2,y2], dim=2)
         return anchors.reshape(-1,4)
