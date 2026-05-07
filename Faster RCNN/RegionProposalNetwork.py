@@ -11,8 +11,9 @@ anchor boxes and delta for moving anchor boxes towards ground truth using conv>>
 distribute and cover every pixels of the image >> big the best unique boxes which doesn't intercept with 
 each other too much >> pick the box proposal boxes using non maximum suppresion'''
 
-    def __init__ (self,in_channels, mid_channels,image_shape, num_anchors = 9, stride = 32): 
+    def __init__ (self,in_channels, mid_channels,image_shape, stride = 32, anchor_sizes= [32, 64, 128], ratios = [0.5,1,2]): 
         super().__init__()
+        num_anchors = len(anchor_sizes) * len(ratios)
         self.conv = nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1) 
         # create classification head that predict each anchor to be either background or foreground
         self.cls_layer = nn.Conv2d(mid_channels, num_anchors*2, kernel_size=1)
@@ -20,11 +21,14 @@ each other too much >> pick the box proposal boxes using non maximum suppresion'
         self.reg_layer = nn.Conv2d(mid_channels, num_anchors*4, kernel_size=1)
         self.stride = stride 
         self.image_shape = image_shape
+        self.anchor_sizes = anchor_sizes 
+        self.ratios = ratios
 
 
-    def anchor_generator(self, feature_map, anchor_sizes= [32, 64, 128], ratios = [0.5,1,2]):
+    def anchor_generator(self, feature_map):
         '''generates 9 anchors (3 sizes x 3 ratios) at every feature map cell
         centre point is (i+0.5)*stride to align with image pixel space'''
+
         device = feature_map.device             
         img_h, img_w = self.image_shape            
         feature_map_height, feature_map_width = feature_map.shape[2], feature_map.shape[3] # feature size is used as starting point since the size and ratio will cover the whole image at the max lenght of the feature map's width and height
@@ -36,8 +40,8 @@ each other too much >> pick the box proposal boxes using non maximum suppresion'
         cy = (cy.reshape(-1) + 0.5) * self.stride
         cx = (cx.reshape(-1) + 0.5) * self.stride 
 
-        sizes = torch.tensor(anchor_sizes, dtype = torch.float32, device= device)
-        ratio = torch.tensor(ratios,dtype= torch.float32, device= device )
+        sizes = torch.tensor(self.anchor_sizes, dtype = torch.float32, device= device)
+        ratio = torch.tensor(self.ratios,dtype= torch.float32, device= device )
         
         wx = (sizes[:,None] * ratio[None].sqrt()).reshape(-1)
         hy = (sizes[:,None] / ratio[None].sqrt()).reshape(-1)

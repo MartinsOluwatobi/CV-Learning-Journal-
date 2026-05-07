@@ -33,8 +33,8 @@ def Encode_rpn_target_and_label (anchors, ground_truth_boxes, neg_iou =0.3, posi
     neg_idx = (labels==0).nonzero(as_tuple=True)[0]
 
     # setting the amount of positive and negative labels that will be picked to avoid having imbalance labels
-    num_pos = min(len(pos_idx),128)
-    num_neg = min(len(neg_idx), 256 - num_pos)
+    num_pos = len(pos_idx)
+    num_neg = min(len(neg_idx), 3 * num_pos)
 
     pos_idx = pos_idx[torch.randperm(len(pos_idx),device = anchors.device)][:num_pos]
     neg_idx = neg_idx[torch.randperm(len(neg_idx),device= anchors.device)][:num_neg]
