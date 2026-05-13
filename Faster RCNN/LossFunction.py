@@ -71,7 +71,7 @@ def Encode_final_target_label (proposal,ground_truth_box,ground_truth_labels, po
     iou = box_iou(proposal,ground_truth_box)
     max_iou, best_gt_idx = iou.max(dim = 1)
     labels[(max_iou>= neg_threshold) & (max_iou<=pos_threshold)]= -1
-    labels[max_iou>= pos_threshold] = ground_truth_labels[best_gt_idx[max_iou>=pos_threshold]]
+    labels[max_iou>= pos_threshold] = ground_truth_labels[best_gt_idx[max_iou>=pos_threshold]] 
 
     pos_idx = (labels> 0).nonzero(as_tuple=True)[0]
     neg_idx = (labels==0).nonzero(as_tuple=True)[0]
