@@ -16,5 +16,6 @@ A comprehensive deep dive into computer vision, documenting my assignments and l
 |----------------------|---------------------|
 |  Faster RCNN         |    https://github.com/MartinsOluwatobi/CV-Learning-Journal-/tree/main/Faster%20RCNN |
 | Weight and Bias (WandB)     |      https://github.com/MartinsOluwatobi/CV-Learning-Journal-/blob/main/Weight_and_Bias_using_WandB.ipynb |
+| Vision Transformer | https://github.com/MartinsOluwatobi/CV-Learning-Journal-/blob/main/VisionTransformerMNISTclassification.ipynb|
 
 
